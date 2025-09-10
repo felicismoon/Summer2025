@@ -1,0 +1,171 @@
+// graphs gamma variables for all of the data
+
+// timer
+
+long st = System.currentTimeMillis(); // start time
+
+import org.jlab.jnp.hipo4.io.*;
+import org.jlab.jnp.hipo4.data.Event;
+import org.jlab.jnp.hipo4.data.Bank;
+//---- imports for GROOT library
+import org.jlab.groot.data.*;
+import org.jlab.groot.graphics.*;
+import org.jlab.groot.ui.*;
+//---- imports for PHYSICS library
+import org.jlab.clas.physics.*;
+
+
+// I added:
+import org.jlab.physics.io.DataManager;
+import org.jlab.groot.base.GStyle;
+import org.jlab.groot.math.*;
+import org.jlab.groot.fitter.DataFitter;
+import java.util.ArrayList;
+
+import java.io.File;
+import java.util.List;
+
+
+// hipochain version:
+
+ArrayList<String> fileNames = new ArrayList<String>();
+
+
+fileNames.add("filteredfileC_1.hipo");
+fileNames.add("filteredfileC_2.hipo");
+fileNames.add("filteredfileC_3.hipo");
+fileNames.add("filteredfilePb_1.hipo");
+fileNames.add("filteredfilePb_2.hipo");
+fileNames.add("filteredfilePb_3.hipo");
+fileNames.add("filteredfilePb_4.hipo");
+fileNames.add("filteredfilePb_5.hipo");
+fileNames.add("filteredfilePb_6.hipo");
+fileNames.add("filteredfileX_1.hipo");
+fileNames.add("filteredfileX_2.hipo");
+fileNames.add("filteredfileX_3.hipo");
+
+
+HipoChain reader = new HipoChain();
+reader.addFiles(fileNames);
+reader.open();
+
+
+Event     event = new Event();
+Bank  particles = new Bank(reader.getSchemaFactory().getSchema("REC::Particle"));
+
+EventFilter  eventFilter = new EventFilter("11:22:22:211:-211:Xn:X+:X-");
+
+//hist stuff
+
+int noOfBins = 100;
+
+H1F hEinE = new H1F("HEinE", noOfBins, 0.0, 20);
+hEinE.setTitleX("#gamma per Event");
+
+H1F hEP = new H1F("hEP", noOfBins, 0.0, 10);
+hEP.setTitleX("#gamma Momentum");
+
+H1F hEPhi = new H1F("hEPhi", noOfBins, -3.5, 3.5);
+hEPhi.setTitleX("#phi");
+
+H1F hETheta = new H1F("hETheta", noOfBins, 0.0, 3.5);
+hETheta.setTitleX("#theta");
+
+H1F  hVz = new H1F("hVz" ,noOfBins, -20, 20);
+hVz.setTitleX("V_z");
+
+TCanvas ec = new TCanvas("ec",800,400);
+
+
+// variables
+
+// note: while the variable names say electron, this program is for the gammas
+
+int readCounter = 0;
+
+int electron_count = 0; // electrons per event
+
+double electronP = 0;
+
+LorentzVector electron = new LorentzVector();
+
+LorentzVector  vBeam   = new LorentzVector(0.0,0.0,10.6,10.6);
+
+double electronPhi = 0;
+
+double electronTheta = 0;
+
+double Vz = 0;
+
+
+while(reader.hasNext()==true){
+     reader.nextEvent(event);
+     event.read(particles);
+
+     readCounter++;
+
+     PhysicsEvent physEvent = DataManager.getPhysicsEvent(10.6,particles);
+
+     if(eventFilter.isValid(physEvent)==true&&particles.getRows()>0){
+
+
+	 int electron_count = 0;
+
+  	 for(int row = 0; row < particles.getRows(); row++) {
+		int pid1 = particles.getInt("pid", row);
+		if(pid1==22){
+	
+ 		electron_count++;
+
+            electron.setPxPyPzM(
+                particles.getFloat("px",row), 
+                particles.getFloat("py",row),
+                particles.getFloat("pz",row),
+                0.0
+                );
+            
+	
+	 Particle gamma1 = physEvent.getParticleByPid(22,0);
+	    double Vz = gamma1.vz();
+            hVz.fill(Vz);
+
+
+	    double electronP = electron.p();
+	    hEP.fill(electronP);
+
+	    double electronPhi = electron.phi();
+	    hEPhi.fill(electronPhi);
+
+	    double electronTheta = electron.theta();
+	    hETheta.fill(electronTheta);
+
+
+         }
+
+	}
+	
+	hEinE.fill(electron_count);
+	electron_count = 0;
+
+ 	
+     }
+}
+
+
+
+
+System.out.println("Number of Events = " + readCounter);
+
+ec.divide(3,2);
+  
+ec.cd(0).draw(hVz);
+ec.cd(1).draw(hEinE);
+ec.cd(2).draw(hEP);
+ec.cd(3).draw(hEPhi);
+ec.cd(4).draw(hETheta);
+
+
+long et = System.currentTimeMillis(); // end time
+long time = et-st; // time to run the script
+System.out.println(" time = " + (time/1000.0) + "s"); // print run time to the screen
+
