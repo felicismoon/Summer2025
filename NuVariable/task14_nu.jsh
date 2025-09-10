@@ -56,7 +56,6 @@ fileNames.add("filteredfileX_3.hipo");
 */
 
 
-
 HipoChain reader = new HipoChain();
 reader.addFiles(fileNames);
 reader.open();
