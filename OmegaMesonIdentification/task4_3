@@ -1,0 +1,212 @@
+// creates graph of invariant mass of two gammas for hipo chain and prints three sigma cut and two sigma cut
+
+import org.jlab.jnp.hipo4.io.*;
+import org.jlab.jnp.hipo4.data.Event;
+import org.jlab.jnp.hipo4.data.Bank;
+//---- imports for GROOT library
+import org.jlab.groot.data.*;
+import org.jlab.groot.graphics.*;
+import org.jlab.groot.ui.*;
+//---- imports for PHYSICS library
+import org.jlab.clas.physics.*;
+//import org.jlab.jnp.reader.*;
+
+// I added:
+import org.jlab.physics.io.DataManager;
+import org.jlab.groot.base.GStyle;
+import org.jlab.groot.math.*;
+import org.jlab.groot.fitter.DataFitter;
+ 
+
+// hipo reader version
+/*
+// Create the reader and load in the file
+HipoReader reader = new HipoReader(); // Create a reader obejct
+//reader.open("Downloads/SimOuts.hipo"); // open a file
+reader.open("data/020014/rec_clas_020014.evio.00040.hipo"); // open a file
+*/ 
+
+
+
+
+ArrayList<String> fileNames = new ArrayList<String>();
+
+
+fileNames.add("filteredfileC_1.hipo");
+fileNames.add("filteredfileC_2.hipo");
+fileNames.add("filteredfileC_3.hipo");
+fileNames.add("filteredfilePb_1.hipo");
+fileNames.add("filteredfilePb_2.hipo");
+fileNames.add("filteredfilePb_3.hipo");
+fileNames.add("filteredfilePb_4.hipo");
+fileNames.add("filteredfilePb_5.hipo");
+fileNames.add("filteredfilePb_6.hipo");
+fileNames.add("filteredfileX_1.hipo");
+fileNames.add("filteredfileX_2.hipo");
+fileNames.add("filteredfileX_3.hipo");
+
+
+
+HipoChain reader = new HipoChain();
+reader.addFiles(fileNames);
+reader.open();
+
+Event     event = new Event();
+Bank  particles = new Bank(reader.getSchemaFactory().getSchema("REC::Particle"));
+ 
+// Define a filter that will require two photons and any number of positive, negative and neutral particles along with them (essentially inclusive 2 gamma)
+EventFilter  eventFilter = new EventFilter("22:22:X+:X-:Xn");
+ 
+
+// Reads the first event and resets to the begining of the file - uncomment next line if using hipo reader, not hipo chain
+//reader.getEvent(event,0); 
+int filterCounter = 0;
+int eventCounter  = 0;
+  
+int noOfBins = 100;
+
+H1F    hpi0 = new H1F("hpi0"   ,noOfBins,0.05, 0.28);
+H1F hpi0vec = new H1F("hpi0vec",noOfBins,0.05, 0.28);
+  
+LorentzVector vL_pi0 = new LorentzVector();
+ 
+while(reader.hasNext()==true){
+      
+     reader.nextEvent(event); // read the event object
+     event.read(particles);   // read particles bank from the event
+      
+     // Data manages creates a physics event with beam energy 10.6 GeV
+     // and from particles bank for reconstructed particles info
+     PhysicsEvent physEvent = DataManager.getPhysicsEvent(10.6,particles);
+      
+     // check if event passes the filter - at least two photons
+     if(eventFilter.isValid(physEvent)==true){
+         filterCounter++;
+         // The particle Lorentz vector is constructed by adding
+         // two photons lorentz vectors 
+         // [22,0] - first photons (or 0'th)
+         // [22,1] - second photons (or index 1)
+         Particle pi0 = physEvent.getParticle("[22,0]+[22,1]");
+         hpi0.fill(pi0.mass());
+         // This is another way that invariant mass can be calculated
+         // Get particles one by one, and add theor lorentz vectors
+         //Particle gamma0 = physEvent.getParticleByPid(22,0);
+         //Particle gamma1 = physEvent.getParticleByPid(22,1);
+         //vL_pi0.copy(gamma0.vector());
+         //vL_pi0.add(gamma1.vector());
+         //hpi0vec.fill(vL_pi0.mass());
+     }
+     eventCounter++;
+}
+System.out.println("analyzed " + eventCounter + " events. # passed filter = " + filterCounter);
+ 
+// Create the canvas with 2 pads and draw the histograms
+TCanvas ec = new TCanvas("ec",800,400);
+ 
+  
+hpi0.setTitleX("M(#gamma#gamma) [GeV]");
+hpi0.setTitleY("Counts");
+hpi0vec.setTitleX("M(#gamma#gamma) [GeV]");
+hpi0vec.setTitleY("Counts");
+ 
+
+ec.cd(0).draw(hpi0);
+
+
+
+// creating lines of fit: first guassian
+
+double amp1 = hpi0.getMax();
+
+// create the fit function with a range.  Use the gaus() function
+F1D f1 = new F1D("f1","[amp]*gaus(x,[mean],[sigma])", .1, .16);
+//set the initial values for the fit
+f1.setParameter(0, amp1); // value for [amp]
+f1.setParameter(1, .135);   // value for [mean]
+f1.setParameter(2, 0.05);  // value for [sigma]
+ 
+
+
+// fit the histogram with the function
+DataFitter.fit(f1, hpi0, "Q"); //No options uses error for sigma
+f1.setLineColor(32);
+f1.setLineWidth(5);
+f1.setLineStyle(1);
+f1.setOptStat(1111);  // draw the statistics box
+ 
+ec.cd(0).draw(f1,"same");   // overlay the fit on the histogram
+ 
+// print the values of the fit parameters
+System.out.println("f1");
+
+for(int j=0; j<f1.getNPars(); j++) System.out.println(" par = " + f1.parameter(j).value() + " error = " + f1.parameter(j).error());
+
+// next: linear fit for the background
+
+F1D f2 = new F1D("f2","[B0]+[B1]*x", .16, .27);
+
+
+double averageValue = hpi0.getIntegral()/noOfBins; // getting average value of hist
+
+f2.setParameter(0, averageValue); // value for [B0]
+f2.setParameter(1, 1); // value for [B1]
+
+DataFitter.fit(f2, hpi0, "Q"); //No options uses error for sigma
+f2.setLineColor(3);
+f2.setLineWidth(5);
+f2.setLineStyle(1);
+f2.setOptStat(1111);  // draw the statistics box
+ 
+ec.cd(0).draw(f2,"same");   // overlay the fit on the histogram
+
+// third gaussian: creating a fit function with both the gaussian and the linear fit
+
+
+//  limits for the third gaussian
+
+double lowerlimit = f1.parameter(1).value() - 3* Math.abs(f1.parameter(2).value());
+
+double upperlimit = f1.parameter(1).value() + 3* Math.abs(f1.parameter(2).value());
+
+F1D f3 = new F1D("f3","[amp]*gaus(x,[mean],[sigma])+[B0]+[B1]*x", lowerlimit, upperlimit);
+
+f3.setParameter(0, f1.parameter(0).value()); // value for [amp]
+f3.setParameter(1, f1.parameter(1).value()); // value for [mean]
+f3.setParameter(2, f1.parameter(2).value()); // value for [sigma]
+f3.setParameter(3, f2.parameter(0).value()); // value for [B0]
+f3.setParameter(4, f2.parameter(1).value()); // value for [B1]
+
+
+DataFitter.fit(f3, hpi0, "Q"); //No options uses error for sigma
+f3.setLineColor(5);
+f3.setLineWidth(5);
+f3.setLineStyle(1);
+f3.setOptStat(1111);  // draw the statistics box
+
+ec.cd(0).draw(f3,"same");   // overlay the fit on the histogram
+
+
+// print out values of the other parameters
+System.out.println("f2");
+for(int j=0; j<f2.getNPars(); j++) System.out.println(" par = " + f2.parameter(j).value() + " error = " + f2.parameter(j).error());
+
+System.out.println("f3");
+for(int j=0; j<f3.getNPars(); j++) System.out.println(" par = " + f3.parameter(j).value() + " error = " + f3.parameter(j).error());
+
+System.out.println("lower limit =  " + lowerlimit);
+System.out.println("upper limit =  " + upperlimit);
+
+double finallowerlimit = f3.parameter(1).value() - 3* Math.abs(f3.parameter(2).value());
+
+double finalupperlimit = f3.parameter(1).value() + 3* Math.abs(f3.parameter(2).value());
+
+System.out.println("final lower limit =  " + finallowerlimit);
+System.out.println("final upper limit =  " + finalupperlimit);
+
+//
+double finallowerlimit = f3.parameter(1).value() - 2* Math.abs(f3.parameter(2).value());
+
+double finalupperlimit = f3.parameter(1).value() + 2* Math.abs(f3.parameter(2).value());
+
+System.out.println("2 sigma final lower limit =  " + finallowerlimit);
+System.out.println("2 sigma final upper limit =  " + finalupperlimit);
